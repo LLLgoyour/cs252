@@ -2,8 +2,6 @@
 
 This repository contains my project, lab, and notebook work from Colby College's Spring 2026 data analysis and visualization course sequence (`CS 251/252`). The course materials progress from structured data ingestion and exploratory visualization into regression, clustering, image segmentation, data transformations, and principal component analysis. This repo reflects that progression through implementation-focused Python assignments and Jupyter notebooks.
 
-For an internship audience, the main value of this repository is that it shows hands-on work building core data-analysis tools from scratch rather than only calling high-level libraries.
-
 ## Technical Highlights
 
 - Built a custom `Data` abstraction for reading typed CSV files, handling missing values, encoding categorical variables, and selecting column subsets by header.
