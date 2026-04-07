@@ -1,4 +1,4 @@
-# CS 251/252 Data Analysis and Visualization Coursework
+# CS 251/252 Data Analysis and Visualization
 
 This repository contains my project, lab, and notebook work from Colby College's Spring 2026 data analysis and visualization course sequence (`CS 251/252`). The course materials progress from structured data ingestion and exploratory visualization into regression, clustering, image segmentation, data transformations, and principal component analysis. This repo reflects that progression through implementation-focused Python assignments and Jupyter notebooks.
 
