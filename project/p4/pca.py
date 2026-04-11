@@ -1,6 +1,6 @@
 '''pca_cov.py
 Performs principal component analysis using the covariance matrix of the dataset
-YOUR NAME HERE
+Jack Dai
 CS 251 / 252: Data Analysis and Visualization
 Spring 2026
 '''
@@ -105,8 +105,14 @@ class PCA:
         NOTE: You should do this wihout any loops
         NOTE: np.cov is off-limits here — compute it from "scratch"!
         '''
-        pass
-
+        
+        n = data.shape[0]
+        if n < 2:
+            raise ValueError('Need at least 2 samples to compute covariance.')
+        centered = data - np.mean(data, axis = 0)
+        cov_mat = (centered.T @ centered) / (n - 1)
+        return cov_mat
+        
     def compute_prop_var(self, e_vals):
         '''Computes the proportion variance accounted for by the principal components (PCs).
 
@@ -119,7 +125,11 @@ class PCA:
         Python list. len = num_pcs
             Proportion variance accounted for by the PCs
         '''
-        pass
+        total = np.sum(e_vals)
+        if total == 0:
+            raise ValueError('Total variance is zero; cannot compute proportion variance.')
+        prop_var = (e_vals / total).tolist()
+        return prop_var
 
     def compute_cum_var(self, prop_var):
         '''Computes the cumulative variance accounted for by the principal components (PCs).
@@ -135,7 +145,14 @@ class PCA:
         Python list. len = num_pcs
             Cumulative variance accounted for by the PCs
         '''
-        pass
+        
+        
+        accum_sum = []
+        running = 0
+        for i in prop_var:
+            running += i
+            accum_sum.append(running)
+        return accum_sum
 
     def fit(self, vars, normalize_dataset=False):
         '''Fits PCA to the data variables `vars` by computing the full set of PCs. The goal is to compute 
@@ -163,7 +180,51 @@ class PCA:
         except for self.A_proj (this will happen later).
         - Remember, this method does NOT actually transform the dataset by PCA.
         '''
-        pass
+        
+        if not vars:
+            raise ValueError('vars must contain at least one variable name.')
+
+        missing_vars = [v for v in vars if v not in self.data.columns]
+        if missing_vars:
+            raise ValueError(f'Variable(s) not found in data: {missing_vars}')
+
+        self.vars = vars
+        A = self.data[vars].to_numpy()
+        self.orig_means = np.mean(A, axis=0)
+        self.orig_mins = np.min(A, axis=0)
+        self.orig_maxs = np.max(A, axis=0)
+        
+        if normalize_dataset:
+            A = normalize(A)
+            self.normalized = True
+        else:
+            self.normalized = False
+            
+        self.A = A
+        self.A_proj = None
+        cov = self.covariance_matrix(self.A)
+        e_vals, e_vecs = np.linalg.eig(cov)
+        e_vals = np.real_if_close(e_vals)
+        e_vecs = np.real_if_close(e_vecs)
+        
+        # pair each eigenvalue with its eigenvector column
+        pairs = []
+        for i in range(len(e_vals)):
+            pairs.append((float(e_vals[i]), e_vecs[:, i]))
+        
+        pairs.sort(key = lambda t: t[0], reverse = True)
+        
+        sorted_vals = []
+        sorted_vec_cols = []
+        for val, vec in pairs:
+            sorted_vals.append(val)
+            sorted_vec_cols.append(vec)
+
+        self.e_vals = np.array(sorted_vals)
+        self.e_vecs = np.column_stack(sorted_vec_cols)
+
+        self.prop_var = self.compute_prop_var(self.e_vals)
+        self.cum_var = self.compute_cum_var(self.prop_var)
 
     def elbow_plot(self, num_pcs_to_keep=None):
         '''Plots a curve of the cumulative variance accounted for by the top `num_pcs_to_keep` PCs.
@@ -181,7 +242,19 @@ class PCA:
         '''
         if self.cum_var is None:
             raise ValueError('Cant plot cumulative variance. Compute the PCA first.')
-        pass
+        num_pcs = len(self.cum_var)
+
+        if num_pcs_to_keep is None:
+            y_vals = self.cum_var
+        else:
+            if num_pcs_to_keep < 1 or num_pcs_to_keep > num_pcs:
+                raise ValueError(f'num_pcs_to_keep must be between 1 and {num_pcs}.')
+            y_vals = self.cum_var[:num_pcs_to_keep]
+
+        x_vals = np.arange(1, len(y_vals) + 1)
+        plt.plot(x_vals, y_vals, marker='o', markersize=10)
+        plt.xlabel('Number of principal components (top k)')
+        plt.ylabel('Cumulative proportion variance')
 
     def pca_project(self, pcs_to_keep):
         '''Project the data onto `pcs_to_keep` PCs (not necessarily contiguous)
@@ -203,7 +276,21 @@ class PCA:
 
         NOTE: This method should set the variable `self.A_proj`
         '''
-        pass
+        if self.A is None or self.e_vecs is None:
+            raise ValueError('Compute PCA with fit before projecting data.')
+        if not pcs_to_keep:
+            raise ValueError('pcs_to_keep must include at least one PC index.')
+
+        num_pcs = self.e_vecs.shape[1]
+        for pc_idx in pcs_to_keep:
+            if pc_idx < 0 or pc_idx >= num_pcs:
+                raise ValueError(f'PC index {pc_idx} is out of bounds for {num_pcs} PCs.')
+
+        selected_e_vecs = self.e_vecs[:, pcs_to_keep]
+        centered_data = center(self.A)
+        pca_proj = centered_data @ selected_e_vecs
+        self.A_proj = pca_proj
+        return pca_proj
 
     def pca_then_project_back(self, top_k):
         '''Project the data into PCA space (on `top_k` PCs) then project it back to the data space
@@ -220,7 +307,28 @@ class PCA:
 
         NOTE: If you normalized, remember to rescale the data projected back to the original data space.
         '''
-        pass
+        if self.e_vecs is None or self.A is None:
+            raise ValueError('Compute PCA with fit before projecting data back.')
+        if self.normalized and (self.orig_mins is None or self.orig_maxs is None):
+            raise ValueError('Missing original min/max statistics for un-normalization.')
+        if top_k < 1 or top_k > self.e_vecs.shape[1]:
+            raise ValueError(f'top_k must be between 1 and {self.e_vecs.shape[1]}.')
+
+        pcs_to_keep = list(range(top_k))
+        A_proj = self.pca_project(pcs_to_keep)
+        e_vecs_top = self.e_vecs[:, pcs_to_keep]
+        A_curr = self.A
+        orig_mins = self.orig_mins
+        orig_maxs = self.orig_maxs
+
+        A_back = A_proj @ e_vecs_top.T + np.mean(A_curr, axis=0)
+
+        if self.normalized:
+            assert orig_mins is not None and orig_maxs is not None
+            ranges = orig_maxs - orig_mins
+            A_back = A_back * ranges + orig_mins
+
+        return A_back
 
     def loading_plot(self):
         '''Create a loading plot of the top 2 PC eigenvectors
@@ -235,4 +343,21 @@ class PCA:
         - Use plt.annotate to label each line by the variable that it corresponds to.
         - Reminder to create useful x and y axis labels.
         '''
-        pass
+        if self.e_vecs is None or self.vars is None:
+            raise ValueError('Compute PCA with fit before making a loading plot.')
+        if len(self.vars) < 2:
+            raise ValueError('Need at least 2 variables to create a loading plot.')
+
+        top_two = self.e_vecs[:, :2]
+        plt.axhline(0, color='k', linewidth=1)
+        plt.axvline(0, color='k', linewidth=1)
+
+        for i, var_name in enumerate(self.vars):
+            x = top_two[i, 0]
+            y = top_two[i, 1]
+            plt.plot([0, x], [0, y], linewidth=2)
+            plt.annotate(var_name, (x, y))
+
+        plt.xlabel('PC1 loading')
+        plt.ylabel('PC2 loading')
+        plt.title('Loading Plot')
